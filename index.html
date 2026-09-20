@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="utf-8"><title>Quản lý bài tập</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--tx:#1d2433;--mu:#6b7385;--ac:#3b6cf6;--bd:#e3e6ee;--gr:#e8f6ee;--bl:#e8efff;--rd:#fdeaea;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12151c;--card:#1b1f29;--tx:#e8eaf0;--mu:#9aa2b5;--ac:#6d93ff;--bd:#2c3242;--gr:#173325;--bl:#1a2848;--rd:#3a1c1c}}
+:root[data-theme="dark"]{--bg:#12151c;--card:#1b1f29;--tx:#e8eaf0;--mu:#9aa2b5;--ac:#6d93ff;--bd:#2c3242;--gr:#173325;--bl:#1a2848;--rd:#3a1c1c}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 16px;background:var(--card);border-bottom:1px solid var(--bd)}
+.wrap{max-width:900px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px}
+.card h3{margin:0 0 8px}.click{cursor:pointer}
+input,select,textarea{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:8px;margin:0 0 8px;max-width:100%}
+textarea{width:100%;min-height:70px;box-sizing:border-box}
+button{font:inherit;background:var(--ac);color:#fff;border:0;border-radius:8px;padding:8px 14px;cursor:pointer}
+button.g{background:var(--bd);color:var(--tx)}
+.tabs{display:flex;gap:8px;margin-bottom:12px}.tabs button{background:var(--card);color:var(--tx);border:1px solid var(--bd)}.tabs .on{background:var(--ac);color:#fff}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.row input,.row select{margin:0}
+.mu{color:var(--mu)}.err{color:#d33}
+.tag{display:inline-block;padding:2px 10px;border-radius:99px;background:var(--bd);font-size:13px}
+.tag.g{background:var(--gr)}.tag.b{background:var(--bl)}.tag.r{background:var(--rd)}
+.files{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.files img{max-height:110px;border-radius:8px;border:1px solid var(--bd)}
+.fl{padding:6px 10px;border:1px solid var(--bd);border-radius:8px;color:var(--tx)}
+.ov{overflow-x:auto}table{border-collapse:collapse;width:100%}td{padding:6px;border-top:1px solid var(--bd);white-space:nowrap}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#222;color:#fff;padding:8px 16px;border-radius:99px;opacity:0;transition:opacity .2s;pointer-events:none}
+</style></head><body><div id="app"></div><div id="toast"></div>
+<script>
+let D={classes:[],users:[],tasks:[],subs:[]},me=null,setup=false,tab='cls',cur=null,pend=[],armed=null,tm;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const day=d=>{const z=new Date(d);return z.getFullYear()+'-'+String(z.getMonth()+1).padStart(2,'0')+'-'+String(z.getDate()).padStart(2,'0')},today=()=>day(Date.now());
+function toast(s){const e=$('#toast');e.textContent=s;e.style.opacity=1;clearTimeout(tm);tm=setTimeout(()=>e.style.opacity=0,3000)}
+async function api(a,body,form){const o={method:body||form?'POST':'GET',headers:{'X-Req':'1'}};
+ if(form)o.body=form;else if(body){o.headers['Content-Type']='application/json';o.body=JSON.stringify(body)}
+ try{const r=await fetch('api.php?a='+a,o),j=await r.json().catch(()=>({error:'Lỗi máy chủ'}));
+  if(!r.ok){toast(j.error||'Có lỗi xảy ra');if(r.status===401&&me&&a!=='login'){me=null;render()}return null}return j}catch(e){toast('Không kết nối được máy chủ');return null}}
+async function refresh(){const j=await api('data');if(j){D=j;render()}}
+async function act(a,body,msg){const j=await api(a,body);if(j){await refresh();if(msg)toast(msg)}return j}
+async function init(){const j=await api('me');if(!j)return render();setup=j.setup;me=j.user;if(me)await refresh();else render()}
+const S=()=>D.users,cn=id=>(D.classes.find(c=>c.id===id)||{}).name||'',sub=(t,s)=>D.subs.find(x=>x.task===t&&x.student===s),tS=t=>D.users.filter(s=>t.to.includes(s.id));
+const opts=()=>D.classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+function status(t,s){const x=sub(t.id,s);if(!x)return t.due&&today()>t.due?'<span class="tag r">Quá hạn</span>':'<span class="tag">Chưa nộp</span>';return x.score!=null?`<span class="tag g">Đã chấm ${x.score}/${t.max}</span>`:'<span class="tag b">Đã nộp</span>'}
+const fileTag=f=>{const u=f.u||'api.php?a=file&id='+f.id;return f.t.startsWith('image/')?`<a href="${u}" target="_blank"><img src="${u}" alt="${esc(f.n)}"></a>`:`<a class="fl" href="${u}">📎 ${esc(f.n)}</a>`};
+const hdr=()=>`<div class="top"><b>📚 Quản lý bài tập</b><span>${esc(me.name)} · ${me.role==='t'?'Giáo viên':esc(me.cl.map(cn).join(', '))} <button class="g" onclick="cur='pw';render()">🔑 Mật khẩu</button> <button class="g" onclick="logout()">Đăng xuất</button></span></div>`;
+function render(){$('#app').innerHTML=!me?(setup?setupV():lv()):cur==='pw'?hdr()+`<div class="wrap">${pwV()}</div>`:me.role==='t'?tv():sv()}
+/* ---- Đăng nhập ---- */
+const W='style="width:100%;box-sizing:border-box"';
+const lv=()=>`<div class="wrap" style="max-width:380px;padding-top:10vh"><div class="card"><h2>📚 Quản lý bài tập</h2><input id="lu" placeholder="Tên đăng nhập" ${W}><input id="lp" type="password" placeholder="Mật khẩu" ${W} onkeydown="if(event.key==='Enter')login()"><button onclick="login()" style="width:100%">Đăng nhập</button></div></div>`;
+const setupV=()=>`<div class="wrap" style="max-width:380px;padding-top:8vh"><div class="card"><h2>Thiết lập lần đầu</h2><p class="mu">Tạo tài khoản giáo viên (quản trị). Học sinh sẽ do bạn tạo sau khi đăng nhập.</p><input id="an" placeholder="Họ tên của bạn" ${W}><input id="au" placeholder="Tên đăng nhập (không dấu)" ${W}><input id="ap" type="password" placeholder="Mật khẩu (từ 6 ký tự)" ${W}><button onclick="doSetup()" style="width:100%">Tạo tài khoản</button></div></div>`;
+async function login(){const j=await api('login',{username:$('#lu').value.trim(),password:$('#lp').value});if(j){me=j.user;tab='cls';cur=null;await refresh()}}
+async function doSetup(){const j=await api('setup',{name:$('#an').value,username:$('#au').value,password:$('#ap').value});if(j){me=j.user;setup=false;await refresh()}}
+async function logout(){await api('logout',{});me=null;cur=null;D={classes:[],users:[],tasks:[],subs:[]};render()}
+const pwV=()=>`<button class="g" onclick="cur=null;render()">← Quay lại</button><div class="card" style="margin-top:12px;max-width:380px"><h3>Đổi mật khẩu</h3><input id="p0" type="password" placeholder="Mật khẩu hiện tại" ${W}><input id="p1" type="password" placeholder="Mật khẩu mới (từ 6 ký tự)" ${W}><button onclick="chPw()">Đổi mật khẩu</button></div>`;
+async function chPw(){const j=await api('pass',{old:$('#p0').value,new:$('#p1').value});if(j){cur=null;render();toast('Đã đổi mật khẩu')}}
+/* ---- Giáo viên ---- */
+function tv(){return hdr()+`<div class="wrap"><div class="tabs"><button class="${tab==='cls'?'on':''}" onclick="tab='cls';cur=null;render()">👥 Lớp &amp; học sinh</button><button class="${tab==='tk'?'on':''}" onclick="tab='tk';cur=null;render()">📝 Bài tập</button></div>${tab==='cls'?tCls():cur?tGrade():tTasks()}</div>`}
+function tCls(){return `<div class="card"><h3>Thêm lớp</h3><div class="row"><select id="cg"><option>11</option><option>12</option></select><select id="cs"><option>Toán</option><option>Lý</option></select><input id="cx" placeholder="Tên nhóm (tùy chọn, vd: Ca tối)"><button onclick="addClass()">Thêm lớp</button></div></div><div class="card"><h3>Tạo tài khoản học sinh</h3><div class="row"><input id="sn" placeholder="Họ tên"><input id="su" placeholder="Tên đăng nhập (không dấu)"><input id="sp" placeholder="Mật khẩu (từ 6 ký tự)"></div><div class="row" style="margin-top:8px">${D.classes.map(c=>`<label><input type="checkbox" class="ck" value="${c.id}" style="margin:0"> ${esc(c.name)}</label>`).join('')||'<span class="mu">Hãy tạo lớp trước</span>'}<button onclick="addStu()">Tạo</button></div></div>`+D.classes.map(c=>{const ss=S().filter(s=>s.cl.includes(c.id)),rest=S().filter(s=>!s.cl.includes(c.id));return `<div class="card"><h3>${esc(c.name)} <small class="mu">(${ss.length} học sinh)</small></h3><div class="ov"><table>${ss.map(s=>`<tr><td>${esc(s.name)}</td><td class="mu">${esc(s.user)}</td><td><input id="pw${c.id}_${s.id}" type="password" placeholder="MK mới" size="8" style="margin:0"></td><td><button class="g" onclick="setPw('${s.id}','${c.id}')">Đặt MK</button> <button class="g" onclick="leave('${s.id}','${c.id}')">Rời lớp</button> <button class="g" onclick="del('${s.id}')">Xóa TK</button></td></tr>`).join('')||'<tr><td class="mu">Chưa có học sinh</td></tr>'}</table></div>${rest.length?`<div class="row" style="margin-top:8px"><select id="ad${c.id}">${rest.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select><button class="g" onclick="addTo('${c.id}')">+ Thêm vào lớp</button></div>`:''}<button class="g" style="margin-top:8px" onclick="delClass('${c.id}')">Xóa lớp</button></div>`}).join('')}
+const arm=(id,m)=>{if(armed===id)return armed=null,true;armed=id;toast(m);return false};
+const addClass=()=>act('addClass',{grade:$('#cg').value,subject:$('#cs').value,label:$('#cx').value},'Đã thêm lớp');
+const addStu=()=>act('addStu',{name:$('#sn').value,username:$('#su').value,password:$('#sp').value,classes:[...document.querySelectorAll('.ck:checked')].map(e=>e.value)},'Đã tạo tài khoản');
+const setPw=(id,c)=>{const p=$('#pw'+c+'_'+id).value;if(!p)return toast('Nhập mật khẩu mới');act('setPw',{id,password:p},'Đã đổi mật khẩu')};
+const del=id=>arm(id,'Bấm Xóa TK lần nữa để xác nhận (xóa cả bài đã nộp của em)')&&act('delStu',{id},'Đã xóa tài khoản');
+const leave=(id,c)=>act('leave',{id,class:c},'Đã cho rời lớp');
+const addTo=c=>act('addTo',{id:$('#ad'+c).value,class:c});
+const delClass=id=>arm(id,'Bấm Xóa lớp lần nữa để xác nhận (xóa cả bài tập của lớp)')&&act('delClass',{id},'Đã xóa lớp');
+const pickHtml=c=>{const ss=S().filter(s=>s.cl.includes(c));return ss.length?`<label><input type="checkbox" checked onchange="document.querySelectorAll('.tk').forEach(e=>e.checked=this.checked)" style="margin:0"> <b>Chọn tất cả</b></label>`+ss.map(s=>`<label><input type="checkbox" class="tk" value="${s.id}" checked style="margin:0"> ${esc(s.name)}</label>`).join(''):'<span class="mu">Lớp này chưa có học sinh</span>'};
+function tTasks(){return `<div class="card"><h3>Giao bài mới</h3><input id="tt" placeholder="Tiêu đề" ${W}><textarea id="td" placeholder="Nội dung / yêu cầu"></textarea><div class="row"><select id="tc" onchange="$('#pick').innerHTML=pickHtml(this.value)">${opts()}</select><label>Hạn nộp <input id="tdue" type="date"></label><label>Thang điểm <input id="tm" type="number" value="10" style="width:70px"></label></div><p class="mu" style="margin:8px 0 4px">Giao cho học sinh (bỏ tick những em không giao):</p><div id="pick" style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:10px">${pickHtml((D.classes[0]||{}).id)}</div><button onclick="addTask()">Giao bài</button></div>`+D.tasks.slice().reverse().map(t=>{const ss=tS(t),n=ss.filter(s=>sub(t.id,s.id)).length;return `<div class="card"><h3>${esc(t.title)}</h3><p class="mu">${esc(cn(t.cls))} · Hạn: ${esc(t.due||'—')} · Đã nộp ${n}/${ss.length}</p><button onclick="cur='${t.id}';render()">Xem &amp; chấm bài</button> <button class="g" onclick="delTask('${t.id}')">Xóa</button></div>`}).join('')}
+const addTask=()=>act('addTask',{title:$('#tt').value,desc:$('#td').value,cls:$('#tc').value,due:$('#tdue').value,max:+$('#tm').value||10,to:[...document.querySelectorAll('.tk:checked')].map(e=>e.value)},'Đã giao bài');
+const delTask=id=>arm(id,'Bấm Xóa lần nữa để xác nhận (xóa cả bài đã nộp)')&&act('delTask',{id},'Đã xóa bài');
+function tGrade(){const t=D.tasks.find(x=>x.id===cur);if(!t){cur=null;return tTasks()}return `<button class="g" onclick="cur=null;render()">← Quay lại</button><div class="card" style="margin-top:12px"><h3>${esc(t.title)}</h3><p>${esc(t.desc)}</p><p class="mu">${esc(cn(t.cls))} · Hạn: ${esc(t.due||'—')}</p></div>`+tS(t).map(s=>{const x=sub(t.id,s.id);return `<div class="card"><b>${esc(s.name)}</b> ${status(t,s.id)}`+(x?`<p class="mu">Nộp lúc ${new Date(x.at).toLocaleString('vi-VN')}${t.due&&day(x.at)>t.due?' · nộp trễ':''}</p><div class="files">${x.files.map(fileTag).join('')}</div>${x.note?`<p>💬 ${esc(x.note)}</p>`:''}<div class="row"><input id="gs${s.id}" type="number" step="0.25" placeholder="Điểm /${t.max}" value="${x.score??''}" style="width:110px"><input id="gf${s.id}" placeholder="Nhận xét" value="${esc(x.fb||'')}" style="flex:1;min-width:150px"><button onclick="grade('${s.id}')">Lưu</button></div>`:'')+'</div>'}).join('')}
+function grade(sid){const x=sub(cur,sid),v=$('#gs'+sid).value;act('grade',{sub:x.id,score:v===''?null:+v,fb:$('#gf'+sid).value},'Đã lưu điểm & nhận xét')}
+/* ---- Học sinh ---- */
+function sv(){const t=D.tasks.find(x=>x.id===cur);return hdr()+`<div class="wrap">`+(t?sDetail(t):(D.tasks.slice().reverse().map(t=>`<div class="card click" onclick="cur='${t.id}';pend=[];render()"><h3>${esc(t.title)}</h3><p class="mu">${esc(cn(t.cls))} · Hạn: ${esc(t.due||'—')}</p>${status(t,me.id)}</div>`).join('')||'<p class="mu">Chưa có bài tập nào.</p>'))+'</div>'}
+function sDetail(t){const x=sub(t.id,me.id),lock=x&&x.score!=null;return `<button class="g" onclick="cur=null;render()">← Quay lại</button><div class="card" style="margin-top:12px"><h3>${esc(t.title)}</h3><p>${esc(t.desc)}</p><p class="mu">${esc(cn(t.cls))} · Hạn: ${esc(t.due||'—')} · Thang điểm ${t.max}</p></div>`+(x?`<div class="card"><h3>Bài đã nộp</h3><div class="files">${x.files.map(fileTag).join('')}</div>${x.note?`<p>💬 ${esc(x.note)}</p>`:''}${lock?`<p><b>Điểm: ${x.score}/${t.max}</b></p><p>${esc(x.fb||'')}</p>`:''}</div>`:'')+(lock?'':`<div class="card"><h3>${x?'Nộp lại':'Nộp bài'}</h3><input type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" onchange="readFiles(this)"><div id="pend" class="files"></div><textarea id="nt" placeholder="Ghi chú cho giáo viên (không bắt buộc)"></textarea><button onclick="doSubmit('${t.id}',this)">Nộp bài</button></div>`)}
+async function shrink(f){if(!f.type.startsWith('image/')||f.type==='image/gif')return f;try{const b=await createImageBitmap(f),k=Math.min(1,1600/Math.max(b.width,b.height)),c=document.createElement('canvas');c.width=Math.round(b.width*k);c.height=Math.round(b.height*k);c.getContext('2d').drawImage(b,0,0,c.width,c.height);const bl=await new Promise(r=>c.toBlob(r,'image/jpeg',.82));return bl&&bl.size<f.size?new File([bl],f.name.replace(/\.\w+$/,'')+'.jpg',{type:'image/jpeg'}):f}catch(e){return f}}
+async function readFiles(inp){for(const f0 of [...inp.files]){if(pend.length>=10){toast('Tối đa 10 file');break}const f=await shrink(f0);if(f.size>10e6){toast(f0.name+' quá lớn (tối đa 10MB)');continue}pend.push({n:f.name,t:f.type,u:URL.createObjectURL(f),file:f})}inp.value='';showPend()}
+function showPend(){$('#pend').innerHTML=pend.map((f,i)=>fileTag(f)+`<button class="g" onclick="pend.splice(${i},1);showPend()">✕</button>`).join('')}
+async function doSubmit(tid,b){const note=$('#nt').value.trim();if(!pend.length&&!note)return toast('Hãy chọn file/ảnh hoặc nhập ghi chú');b.disabled=true;b.textContent='Đang nộp…';const fd=new FormData();fd.append('task',tid);fd.append('note',note);pend.forEach(f=>fd.append('f[]',f.file,f.file.name));const j=await api('submit',null,fd);if(j){pend=[];await refresh();toast('Đã nộp bài ✓')}else{b.disabled=false;b.textContent='Nộp bài'}}
+init();
+</script></body></html>

@@ -1,0 +1,16 @@
+QUẢN LÝ BÀI TẬP — HƯỚNG DẪN CÀI ĐẶT
+
+Cần: hosting/website có PHP 7.4 trở lên và SQLite (PDO_SQLITE). Hầu hết hosting WordPress đều có.
+
+1. Tải cả thư mục này lên hosting (ví dụ vào public_html/baitap) bằng File Manager hoặc FTP.
+2. Mở địa chỉ trang, ví dụ https://tenmiencuaban.vn/baitap/
+3. Lần đầu mở sẽ hiện màn hình "Thiết lập lần đầu": tạo tài khoản giáo viên (họ tên, tên đăng nhập, mật khẩu từ 6 ký tự).
+4. Đăng nhập, tạo lớp, tạo tài khoản học sinh rồi gửi tên đăng nhập/mật khẩu cho các em.
+
+Lưu ý
+- Nên dùng https:// để mật khẩu được mã hóa khi truyền đi.
+- Toàn bộ dữ liệu và file học sinh nộp nằm trong thư mục "data" (tự tạo khi chạy lần đầu). Hãy sao lưu thư mục này định kỳ.
+- Thư mục data đã được chặn truy cập trực tiếp bằng .htaccess (Apache). Nếu hosting dùng Nginx, cần thêm quy tắc chặn đường dẫn /data/ trong cấu hình.
+- Giới hạn dung lượng tải lên phụ thuộc hosting (upload_max_filesize, post_max_size). Ảnh được tự thu nhỏ trước khi nộp nên thường không vướng giới hạn này.
+- Quên mật khẩu: giáo viên đặt lại cho học sinh ở tab "Lớp & học sinh". Nếu giáo viên quên mật khẩu, xóa thư mục data để thiết lập lại (mất toàn bộ dữ liệu) hoặc liên hệ người quản trị hosting.
+- Thử trên máy tính: cài PHP, mở terminal trong thư mục này và chạy: php -S localhost:8000 rồi vào http://localhost:8000
